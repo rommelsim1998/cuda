@@ -1,0 +1,32 @@
+// cdfscan.comp
+#version 450
+
+layout(local_size_x = 256) in; // Assuming 256 bins
+
+layout(std430, binding = 1) buffer Histogram {
+    uint bins[256];
+};
+
+layout(std430, binding = 2) buffer CDF {
+    float cdf[256];
+} cdf;
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= 256) return;
+
+    if (id == 0) {
+        cdf.cdf[id] = bins[id];
+    } else {
+        barrier();
+        cdf.cdf[id] = cdf.cdf[id - 1] + bins[id];
+    }
+    barrier();
+
+    // Normalize CDF
+    if (id == 255) {
+        for (int i = 0; i < 256; ++i) {
+            cdf.cdf[i] /= cdf.cdf[255];
+        }
+    }
+}

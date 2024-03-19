@@ -1,0 +1,2 @@
+device,driverversion,duration (ms),frames,fps
+NVIDIA T500,2219098112,1001.3947,319,318.5557
