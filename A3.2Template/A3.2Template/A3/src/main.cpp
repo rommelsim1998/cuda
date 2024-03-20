@@ -95,6 +95,64 @@ public:
 
 	std::vector<std::string> shaderNames;
 
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+		VkPhysicalDeviceMemoryProperties memProperties;
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+				return i;
+			}
+		}
+
+		throw std::runtime_error("Failed to find suitable memory type!");
+	}
+
+	VkBuffer createBuffer(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory* bufferMemory) {
+		VkBuffer buffer;
+
+		VkBufferCreateInfo bufferInfo = {};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = size;
+		bufferInfo.usage = usage;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create buffer.");
+		}
+
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+		if (vkAllocateMemory(device, &allocInfo, nullptr, bufferMemory) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to allocate buffer memory.");
+		}
+
+		vkBindBufferMemory(device, buffer, *bufferMemory, 0);
+
+		return buffer;
+	}
+
+	VkDeviceMemory createMemory(VkDevice device, VkPhysicalDevice physicalDevice, VkMemoryRequirements memRequirements, VkMemoryPropertyFlags properties) {
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+		VkDeviceMemory memory;
+		if (vkAllocateMemory(device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to allocate memory.");
+		}
+
+		return memory;
+	}
+
+
 	VulkanExample() : VkAppBase(ENABLE_VALIDATION)
 	{
 		title = "Compute shader image processing";
@@ -243,11 +301,11 @@ public:
 	void buildHistogramCommandBuffer()
 	{
 		// Create buffer info first
-		auto bufferSize = sizeof(BufferHistoeq);
+		auto bufferSize = sizeof(unsigned int) * 256;			
 		VkBufferCreateInfo bufferCreateInfo = {};
 		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferCreateInfo.size = bufferSize; // Specify the size of your buffer
-		bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // Specify the buffer usage
+		bufferCreateInfo.size = bufferSize;								// Specify the size of your buffer
+		bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;	// Specify the buffer usage
 
 		// Create the buffer using buffer_info
 		VkBuffer buffer;
@@ -304,7 +362,6 @@ public:
 
 		VkWriteDescriptorSet descriptorWrites[] = { imageWriteDescriptorSet, bufferWriteDescriptorSet };
 
-		// VkWriteDescriptorSet writeDescriptorSet = vks::initializers::writeDescriptorSet(compute.descriptorSets[0], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0, &imageInfo);
 		vkUpdateDescriptorSets(device, 2, descriptorWrites, 0, nullptr);
 
 		// Begin recording commands into the command buffer
@@ -329,9 +386,55 @@ public:
 	}
 
 
-	void buildCdfScanCommandBuffer() 
+	void buildCdfScanCommandBuffer()
 	{
 		vkQueueWaitIdle(compute.queue);
+
+		// Buffer handles and memory
+		VkBuffer histogramBuffer, cdfBuffer, imgSizeBuffer;
+		VkDeviceMemory histogramBufferMemory, cdfBufferMemory, imgSizeBufferMemory;
+
+		// init and create buffer and memory for histogram, cdf and image
+		histogramBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int) * 256, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &histogramBufferMemory);
+
+		cdfBuffer = createBuffer(device, physicalDevice, 256 * sizeof(float), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &cdfBufferMemory);
+		
+		imgSizeBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &imgSizeBufferMemory);
+
+		// Create descriptor buffer info for each buffer
+		VkDescriptorBufferInfo histogramBufferInfo = { histogramBuffer, 0, VK_WHOLE_SIZE };
+		VkDescriptorBufferInfo cdfBufferInfo = { cdfBuffer, 0, VK_WHOLE_SIZE };
+		VkDescriptorBufferInfo imgSizeBufferInfo = { imgSizeBuffer, 0, sizeof(uint32_t) };
+
+		// Write descriptor sets
+		VkWriteDescriptorSet writeSets[3] = {};
+
+		writeSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeSets[0].dstSet = compute.descriptorSets[1];
+		writeSets[0].dstBinding = 0;
+		writeSets[0].descriptorCount = 1;
+		writeSets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		writeSets[0].pBufferInfo = &histogramBufferInfo;
+
+		writeSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeSets[1].dstSet = compute.descriptorSets[1];
+		writeSets[1].dstBinding = 1;
+		writeSets[1].descriptorCount = 1;
+		writeSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		writeSets[1].pBufferInfo = &cdfBufferInfo;
+
+		writeSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeSets[2].dstSet = compute.descriptorSets[1];
+		writeSets[2].dstBinding = 2;
+		writeSets[2].descriptorCount = 1;
+		writeSets[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeSets[2].pBufferInfo = &imgSizeBufferInfo;
+
+		// Update the descriptor set
+		vkUpdateDescriptorSets(device, 3, writeSets, 0, nullptr);
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 		VK_CHECK_RESULT(vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo));
@@ -339,10 +442,11 @@ public:
 		vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines[1]);
 		vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayouts[1], 0, 1, &compute.descriptorSets[1], 0, 0);
 
-		vkCmdDispatch(compute.commandBuffer, 1, 1, 1); // Only one group needed for CDF computation
+		vkCmdDispatch(compute.commandBuffer, 1, 1, 1); // Dispatch the compute shader
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(compute.commandBuffer));
 	}
+
 
 	void buildApplyHistoCommandBuffer() 
 	{
@@ -663,23 +767,12 @@ public:
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 	}
 
-	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-		VkPhysicalDeviceMemoryProperties memProperties;
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
-
-		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-				return i;
-			}
-		}
-
-		throw std::runtime_error("Failed to find suitable memory type!");
-	}
+	
 
 	void prepareCompute() {
 		vkGetDeviceQueue(device, vulkanDevice->queueFamilyIndices.compute, 0, &compute.queue);
-		//shaderNames = { "histogram", "cdfscan", "applyhisto" };
-		shaderNames = { "histogram" };
+
+		shaderNames = { "histogram", "cdfscan" };
 	
 		for (const auto& shaderName : shaderNames) {
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings;
@@ -756,7 +849,7 @@ public:
 		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &compute.semaphore));
 
 		buildHistogramCommandBuffer();
-		// buildCdfScanCommandBuffer();
+		buildCdfScanCommandBuffer();
 		// buildApplyHistoCommandBuffer();
 	}
 
@@ -866,7 +959,6 @@ public:
 		setupDescriptorSet();
 		prepareGraphics();
 		prepareCompute();
-		//prepareStorageBuffers();
 		buildCommandBuffers();
 		prepared = true;
 	}

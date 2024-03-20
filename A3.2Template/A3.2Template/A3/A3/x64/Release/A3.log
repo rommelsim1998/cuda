@@ -1,16 +1,16 @@
 ﻿  main.cpp
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(214,23): warning C4244: '=': conversion from 'uint32_t' to 'float', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(516,88): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(518,92): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(532,18): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(564,67): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(572,58): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(621,29): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(645,52): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
-C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(713,156): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(272,23): warning C4244: '=': conversion from 'uint32_t' to 'float', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(620,88): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(622,92): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(636,18): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(668,67): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(676,58): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(725,29): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(749,52): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(806,156): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
   Generating code
-  2 of 5235 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+  12 of 5237 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    22 functions had inline decision re-evaluated but remain unchanged
+    24 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   A3.vcxproj -> C:\cuda\A3.2Template\A3.2Template\A3\x64\Release\A3.exe
