@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>C:\A3.2Template\A3.2Template\A3\x64\Release\A3.exe</FullPath>
+      <FullPath>C:\cuda\A3.2Template\A3.2Template\A3\x64\Release\A3.exe</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

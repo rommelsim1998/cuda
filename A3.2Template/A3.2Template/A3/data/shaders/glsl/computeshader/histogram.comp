@@ -1,35 +1,19 @@
 // histogram.comp
 #version 450
+layout(local_size_x = 16, local_size_y = 16) in;
 
-layout(local_size_x = 256) in; // Assume one workgroup processes all bins
-
-layout(binding = 0, r32f) uniform readonly image2D inputImage; // Specify image format
+layout(binding = 0, rgba8) uniform image2D imgInput;
 layout(std430, binding = 1) buffer Histogram {
-    uint bins[256];
-} histogram;
+    uint histo[];
+};
+
+#define HISTOGRAM256_BIN_COUNT 256
 
 void main() {
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= 256) return;
+    ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+    vec4 pixel = imageLoad(imgInput, coords);
+    float Y = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b;
 
-    // Initialize histogram bins - consider moving this to another shader or compute pass
-    if (id == 0) {
-        for (int i = 0; i < 256; i++) {
-            histogram.bins[i] = 0;
-        }
-    }
-
-    barrier();
-
-    ivec2 imageSize = imageSize(inputImage);
-    for (int y = 0; y < imageSize.y; ++y) {
-        for (int x = 0; x < imageSize.x; ++x) {
-            vec4 pixel = imageLoad(inputImage, ivec2(x, y));
-            float luminance = dot(pixel.rgb, vec3(0.299, 0.587, 0.114)); // Simple luminance calculation
-            uint bin = uint(luminance * 255.0);
-            if (bin == id) {
-                atomicAdd(histogram.bins[id], 1);
-            }
-        }
-    }
+    uint bin = uint(Y * 255.0);
+    atomicAdd(histo[bin], 1);
 }
