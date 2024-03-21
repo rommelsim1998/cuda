@@ -553,7 +553,7 @@ public:
 		vkQueueWaitIdle(compute.queue);
 
 		// Assuming imgInput is already created and its view is assigned
-		VkImageView imgInputView = textureComputeTarget.view;
+		VkImageView imgInputView = textureColorMap.view;
 
 		// Create the output image and its view
 		VkImage imgOutput;
@@ -562,7 +562,7 @@ public:
 			VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &imgOutput, &imgOutputMemory);
 
-		VkImageView imgOutputView;
+		VkImageView imgOutputView = textureComputeTarget.view;
 		createImageView(device, imgOutput, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, &imgOutputView);
 
 		// Descriptor image info for input and output images

@@ -10,8 +10,8 @@ C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(877,29): warning C4267: 'argum
 C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(901,52): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
 C:\cuda\A3.2Template\A3.2Template\A3\src\main.cpp(958,156): warning C4267: 'argument': conversion from 'size_t' to 'uint32_t', possible loss of data
   Generating code
-  13 of 5242 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+  2 of 5242 functions (<0.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    23 functions had inline decision re-evaluated but remain unchanged
+    22 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   A3.vcxproj -> C:\cuda\A3.2Template\A3.2Template\A3\x64\Release\A3.exe
