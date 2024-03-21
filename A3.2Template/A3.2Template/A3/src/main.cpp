@@ -425,7 +425,7 @@ public:
 		bufferInfo.offset = 0;
 		bufferInfo.range = VK_WHOLE_SIZE;
 
-		VkImageView imgInputView = textureComputeTarget.view;
+		VkImageView imgInputView = textureColorMap.view;
 
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL; // Make sure the layout matches the shader expectations
