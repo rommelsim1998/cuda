@@ -72,6 +72,7 @@ public:
 		std::vector<VkPipelineLayout> pipelineLayouts;					// Layout of the compute pipeline
 		std::vector<VkPipeline> pipelines;								// Compute pipelines for image filters
 		int32_t pipelineIndex = 0;										// Current image filtering compute pipeline index
+		VkBuffer cdfBuffer;
 	} compute;
 
 	vks::Buffer vertexBuffer;
@@ -150,6 +151,95 @@ public:
 		}
 
 		return memory;
+	}
+
+	VkResult createImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage* image, VkDeviceMemory* imageMemory) {
+		VkImageCreateInfo imageInfo = {};
+		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		imageInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageInfo.extent.width = width;
+		imageInfo.extent.height = height;
+		imageInfo.extent.depth = 1;
+		imageInfo.mipLevels = 1;
+		imageInfo.arrayLayers = 1;
+		imageInfo.format = format;
+		imageInfo.tiling = tiling;
+		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageInfo.usage = usage;
+		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		VkResult result = vkCreateImage(device, &imageInfo, nullptr, image);
+		if (result != VK_SUCCESS) {
+			return result;
+		}
+
+		VkMemoryRequirements memRequirements;
+		vkGetImageMemoryRequirements(device, *image, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+		result = vkAllocateMemory(device, &allocInfo, nullptr, imageMemory);
+		if (result != VK_SUCCESS) {
+			vkDestroyImage(device, *image, nullptr);
+			return result;
+		}
+
+		vkBindImageMemory(device, *image, *imageMemory, 0);
+
+		return VK_SUCCESS;
+	}
+
+	VkResult createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, VkImageView* imageView) {
+		VkImageViewCreateInfo viewInfo = {};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = image;
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewInfo.format = format;
+		viewInfo.subresourceRange.aspectMask = aspectFlags;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = 1;
+
+		return vkCreateImageView(device, &viewInfo, nullptr, imageView);
+	}
+
+	VkCommandBuffer beginSingleTimeCommands(VkDevice device, VkCommandPool commandPool) 
+	{
+		VkCommandBufferAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = commandPool;
+		allocInfo.commandBufferCount = 1;
+
+		VkCommandBuffer commandBuffer;
+		vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+		vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+		return commandBuffer;
+	}
+
+	void endSingleTimeCommands(VkDevice device, VkCommandPool commandPool, VkCommandBuffer commandBuffer, VkQueue queue) {
+		vkEndCommandBuffer(commandBuffer);
+
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+
+		vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+		vkQueueWaitIdle(queue);  // Wait for the queue to finish executing before freeing the command buffer
+
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	}
 
 
@@ -385,20 +475,20 @@ public:
 		VK_CHECK_RESULT(vkEndCommandBuffer(compute.commandBuffer));
 	}
 
-
+	
 	void buildCdfScanCommandBuffer()
 	{
 		vkQueueWaitIdle(compute.queue);
 
 		// Buffer handles and memory
-		VkBuffer histogramBuffer, cdfBuffer, imgSizeBuffer;
+		VkBuffer histogramBuffer, imgSizeBuffer;
 		VkDeviceMemory histogramBufferMemory, cdfBufferMemory, imgSizeBufferMemory;
 
 		// init and create buffer and memory for histogram, cdf and image
 		histogramBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int) * 256, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &histogramBufferMemory);
 
-		cdfBuffer = createBuffer(device, physicalDevice, 256 * sizeof(float), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+		compute.cdfBuffer = createBuffer(device, physicalDevice, 256 * sizeof(float), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &cdfBufferMemory);
 		
 		imgSizeBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -406,7 +496,7 @@ public:
 
 		// Create descriptor buffer info for each buffer
 		VkDescriptorBufferInfo histogramBufferInfo = { histogramBuffer, 0, VK_WHOLE_SIZE };
-		VkDescriptorBufferInfo cdfBufferInfo = { cdfBuffer, 0, VK_WHOLE_SIZE };
+		VkDescriptorBufferInfo cdfBufferInfo = { compute.cdfBuffer, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo imgSizeBufferInfo = { imgSizeBuffer, 0, sizeof(uint32_t) };
 
 		// Write descriptor sets
@@ -448,22 +538,74 @@ public:
 	}
 
 
-	void buildApplyHistoCommandBuffer() 
+	void buildApplyHistoCommandBuffer()
 	{
 		vkQueueWaitIdle(compute.queue);
 
+		// Assuming imgInput is already created and its view is assigned
+		VkImageView imgInputView = textureComputeTarget.view;
+
+		// Create the output image and its view
+		VkImage imgOutput;
+		VkDeviceMemory imgOutputMemory;
+		createImage(device, physicalDevice, textureComputeTarget.width, textureComputeTarget.height,
+			VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &imgOutput, &imgOutputMemory);
+
+		VkImageView imgOutputView;
+		createImageView(device, imgOutput, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, &imgOutputView);
+
+		// Descriptor image info for input and output images
+		VkDescriptorImageInfo inputImageInfo = {};
+		inputImageInfo.imageView = imgInputView;
+		inputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		VkDescriptorImageInfo outputImageInfo = {};
+		outputImageInfo.imageView = imgOutputView;
+		outputImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		// Assuming cdfBuffer is already created and initialized
+		VkBuffer cdfBuffer = compute.cdfBuffer;
+
+		// Descriptor buffer info for the CDF buffer
+		VkDescriptorBufferInfo cdfBufferInfo = {};
+		cdfBufferInfo.buffer = cdfBuffer;
+		cdfBufferInfo.offset = 0;
+		cdfBufferInfo.range = VK_WHOLE_SIZE;
+
+		// Write descriptor sets
+		VkWriteDescriptorSet writeSets[3] = {
+			// Input image descriptor
+			vks::initializers::writeDescriptorSet(
+				compute.descriptorSets[2], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0, &inputImageInfo
+			),
+			// Output image descriptor
+			vks::initializers::writeDescriptorSet(
+				compute.descriptorSets[2], VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &outputImageInfo
+			),
+			// CDF buffer descriptor
+			vks::initializers::writeDescriptorSet(
+				compute.descriptorSets[2], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &cdfBufferInfo
+			)
+		};
+
+		vkUpdateDescriptorSets(device, 3, writeSets, 0, nullptr);
+
+		// Command buffer recording
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 		VK_CHECK_RESULT(vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo));
 
 		vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelines[2]);
 		vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayouts[2], 0, 1, &compute.descriptorSets[2], 0, 0);
 
-		int groupCountX = (textureComputeTarget.width + 15) / 16;
-		int groupCountY = (textureComputeTarget.height + 15) / 16;
+		// Dispatch the compute shader
+		uint32_t groupCountX = (textureComputeTarget.width + 15) / 16;
+		uint32_t groupCountY = (textureComputeTarget.height + 15) / 16;
 		vkCmdDispatch(compute.commandBuffer, groupCountX, groupCountY, 1);
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(compute.commandBuffer));
 	}
+
 
 
 
@@ -772,7 +914,7 @@ public:
 	void prepareCompute() {
 		vkGetDeviceQueue(device, vulkanDevice->queueFamilyIndices.compute, 0, &compute.queue);
 
-		shaderNames = { "histogram", "cdfscan" };
+		shaderNames = { "histogram", "cdfscan" , "applyhisto"};
 	
 		for (const auto& shaderName : shaderNames) {
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings;
@@ -850,7 +992,7 @@ public:
 
 		buildHistogramCommandBuffer();
 		buildCdfScanCommandBuffer();
-		// buildApplyHistoCommandBuffer();
+		buildApplyHistoCommandBuffer();
 	}
 
 	// Prepare and initialize uniform buffer containing shader uniforms
@@ -899,7 +1041,9 @@ public:
 			);
 
 			// Dispatch the compute operation, using appropriate group counts for each shader
-			uint32_t x = 16, y = 16, z = 1;  // Adjust these values based on your compute shader's needs
+			uint32_t x = (textureComputeTarget.width + 15) / 16;
+			uint32_t y = (textureComputeTarget.height + 15) / 16; 
+			uint32_t z = 1; 
 			vkCmdDispatch(compute.commandBuffer, x, y, z);
 		}
 
@@ -909,12 +1053,43 @@ public:
 
 	void draw()
 	{
+		// Begin single time commands for image layout transition
+		VkCommandBuffer layoutCmdBuffer = beginSingleTimeCommands(device, compute.commandPool);
+
+		// Define the image memory barrier for the layout transition
+		VkImageMemoryBarrier barrier = {};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.image = textureComputeTarget.image;
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+
+		// Insert the pipeline barrier into the command buffer
+		vkCmdPipelineBarrier(
+			layoutCmdBuffer,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier
+		);
+
+		// End single time commands (submit and wait for completion)
+		endSingleTimeCommands(device, compute.commandPool, layoutCmdBuffer, compute.queue);
+
+		// Now the image is in the correct layout, record and submit compute command buffer
 		recordComputeCommandBuffer();
 
-		// Wait for rendering finished
 		VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
-		// Submit compute commands
 		VkSubmitInfo computeSubmitInfo = vks::initializers::submitInfo();
 		computeSubmitInfo.commandBufferCount = 1;
 		computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
@@ -931,7 +1106,8 @@ public:
 		VkSemaphore graphicsWaitSemaphores[] = { compute.semaphore, semaphores.presentComplete };
 		VkSemaphore graphicsSignalSemaphores[] = { graphics.semaphore, semaphores.renderComplete };
 
-		// Submit graphics commands
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
 		submitInfo.waitSemaphoreCount = 2;
