@@ -73,6 +73,7 @@ public:
 		std::vector<VkPipeline> pipelines;								// Compute pipelines for image filters
 		int32_t pipelineIndex = 0;										// Current image filtering compute pipeline index
 		VkBuffer cdfBuffer;
+		VkBuffer histogramBuffer;
 	} compute;
 
 	vks::Buffer vertexBuffer;
@@ -395,16 +396,16 @@ public:
 		auto bufferSize = sizeof(unsigned int) * HISTOGRAM256_BIN_COUNT;
 		VkBufferCreateInfo bufferCreateInfo = {};
 		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferCreateInfo.size = bufferSize;								// Specify the size of your buffer
-		bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;	// Specify the buffer usage
+		bufferCreateInfo.size = sizeof(unsigned int) * HISTOGRAM256_BIN_COUNT;			// Specify the size of your buffer
+		bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;					// Specify the buffer usage
 
 		// Create the buffer using buffer_info
-		VkBuffer buffer;
-		vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer);
+		// VkBuffer buffer;
+		vkCreateBuffer(device, &bufferCreateInfo, nullptr, &compute.histogramBuffer);
 
 		// Allocate mem for the buffer
 		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+		vkGetBufferMemoryRequirements(device, compute.histogramBuffer, &memRequirements);
 
 		VkMemoryAllocateInfo memAllocInfo = {};
 		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -414,7 +415,7 @@ public:
 		VkDeviceMemory bufferMemory;
 		vkAllocateMemory(device, &memAllocInfo, nullptr, &bufferMemory);
 
-		vkBindBufferMemory(device, buffer, bufferMemory, 0);
+		vkBindBufferMemory(device, compute.histogramBuffer, bufferMemory, 0);
 
 		// Wait for the compute queue to be idle
 		vkQueueWaitIdle(compute.queue);
@@ -422,7 +423,7 @@ public:
 		// Update descriptor sets with valid data (assuming compute.descriptorSets[0] is already allocated)
 		// Example: Update descriptor sets with buffer or image bindings
 		VkDescriptorBufferInfo bufferInfo = {};  // Define buffer info with valid data
-		bufferInfo.buffer = buffer;
+		bufferInfo.buffer = compute.histogramBuffer;
 		bufferInfo.offset = 0;
 		bufferInfo.range = VK_WHOLE_SIZE;
 
@@ -482,12 +483,12 @@ public:
 		vkQueueWaitIdle(compute.queue);
 
 		// Buffer handles and memory
-		VkBuffer histogramBuffer, imgSizeBuffer;
+		VkBuffer imgSizeBuffer;
 		VkDeviceMemory histogramBufferMemory, cdfBufferMemory, imgSizeBufferMemory;
 
 		// init and create buffer and memory for histogram, cdf and image
-		histogramBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int) * 256, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &histogramBufferMemory);
+		// histogramBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int) * HISTOGRAM256_BIN_COUNT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		// 	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &histogramBufferMemory);
 
 		compute.cdfBuffer = createBuffer(device, physicalDevice, 256 * sizeof(float), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &cdfBufferMemory);
@@ -496,7 +497,7 @@ public:
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &imgSizeBufferMemory);
 
 		// Create descriptor buffer info for each buffer
-		VkDescriptorBufferInfo histogramBufferInfo = { histogramBuffer, 0, VK_WHOLE_SIZE };
+		VkDescriptorBufferInfo histogramBufferInfo = { compute.histogramBuffer, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo cdfBufferInfo = { compute.cdfBuffer, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo imgSizeBufferInfo = { imgSizeBuffer, 0, sizeof(uint32_t) };
 
