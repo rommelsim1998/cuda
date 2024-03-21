@@ -86,11 +86,12 @@ public:
 		glm::mat4 modelView;
 	} uboVS;
 
+#define HISTOGRAM256_BIN_COUNT 256
 	struct BufferHistoeq {
-		unsigned int histoBin[256];
-		float cdf[256];
+		unsigned int histoBin[HISTOGRAM256_BIN_COUNT];
+		float cdf[HISTOGRAM256_BIN_COUNT];
 	};
-	BufferHistoeq bufferHistoeq;
+	//BufferHistoeq bufferHistoeq;
 
 	int vertexBufferSize;
 
@@ -391,7 +392,7 @@ public:
 	void buildHistogramCommandBuffer()
 	{
 		// Create buffer info first
-		auto bufferSize = sizeof(unsigned int) * 256;			
+		auto bufferSize = sizeof(unsigned int) * HISTOGRAM256_BIN_COUNT;
 		VkBufferCreateInfo bufferCreateInfo = {};
 		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		bufferCreateInfo.size = bufferSize;								// Specify the size of your buffer
