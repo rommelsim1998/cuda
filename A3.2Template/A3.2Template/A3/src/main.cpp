@@ -496,6 +496,14 @@ public:
 		imgSizeBuffer = createBuffer(device, physicalDevice, sizeof(unsigned int), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &imgSizeBufferMemory);
 
+		auto imgSize = textureColorMap.height * textureColorMap.width;
+
+		// Update uniform buffer 
+		uint32_t* data;
+		vkMapMemory(device, imgSizeBufferMemory, 0, sizeof(uint32_t), 0, (void**)&data);
+		*data = imgSize;
+		vkUnmapMemory(device, imgSizeBufferMemory);
+
 		// Create descriptor buffer info for each buffer
 		VkDescriptorBufferInfo histogramBufferInfo = { compute.histogramBuffer, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo cdfBufferInfo = { compute.cdfBuffer, 0, VK_WHOLE_SIZE };
